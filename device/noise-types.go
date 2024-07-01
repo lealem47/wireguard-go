@@ -47,7 +47,6 @@ func (key NoisePrivateKey) Equals(tar NoisePrivateKey) bool {
 
 func (key *NoisePrivateKey) FromHex(src string) (err error) {
 	err = loadExactHex(key[:], src)
-	key.clamp()
 	return
 }
 
@@ -56,7 +55,6 @@ func (key *NoisePrivateKey) FromMaybeZeroHex(src string) (err error) {
 	if key.IsZero() {
 		return
 	}
-	key.clamp()
 	return
 }
 

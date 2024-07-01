@@ -8,8 +8,7 @@ package device
 import (
 	"encoding/hex"
 	"testing"
-
-	"golang.org/x/crypto/blake2s"
+        wolfSSL "github.com/wolfssl/go-wolfssl"
 )
 
 type KDFTest struct {
@@ -51,7 +50,7 @@ func TestKDF(t *testing.T) {
 		},
 	}
 
-	var t0, t1, t2 [blake2s.Size]byte
+	var t0, t1, t2 [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
 
 	for _, test := range tests {
 		key, _ := hex.DecodeString(test.key)

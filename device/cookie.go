@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+        wolfSSL "github.com/wolfssl/go-wolfssl"
 	"golang.org/x/crypto/blake2s"
 	"golang.org/x/crypto/chacha20poly1305"
 )
@@ -18,10 +19,10 @@ import (
 type CookieChecker struct {
 	sync.RWMutex
 	mac1 struct {
-		key [blake2s.Size]byte
+		key [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
 	}
 	mac2 struct {
-		secret        [blake2s.Size]byte
+		secret        [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
 		secretSet     time.Time
 		encryptionKey [chacha20poly1305.KeySize]byte
 	}
@@ -30,13 +31,13 @@ type CookieChecker struct {
 type CookieGenerator struct {
 	sync.RWMutex
 	mac1 struct {
-		key [blake2s.Size]byte
+		key [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
 	}
 	mac2 struct {
-		cookie        [blake2s.Size128]byte
+		cookie        [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
 		cookieSet     time.Time
 		hasLastMAC1   bool
-		lastMAC1      [blake2s.Size128]byte
+		lastMAC1      [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
 		encryptionKey [chacha20poly1305.KeySize]byte
 	}
 }
@@ -71,10 +72,10 @@ func (st *CookieChecker) CheckMAC1(msg []byte) bool {
 	defer st.RUnlock()
 
 	size := len(msg)
-	smac2 := size - blake2s.Size128
-	smac1 := smac2 - blake2s.Size128
+	smac2 := size - wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE
+	smac1 := smac2 - wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE
 
-	var mac1 [blake2s.Size128]byte
+	var mac1 [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
 
 	mac, _ := blake2s.New128(st.mac1.key[:])
 	mac.Write(msg[:smac1])
@@ -93,7 +94,7 @@ func (st *CookieChecker) CheckMAC2(msg, src []byte) bool {
 
 	// derive cookie key
 
-	var cookie [blake2s.Size128]byte
+	var cookie [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
 	func() {
 		mac, _ := blake2s.New128(st.mac2.secret[:])
 		mac.Write(src)
@@ -102,9 +103,9 @@ func (st *CookieChecker) CheckMAC2(msg, src []byte) bool {
 
 	// calculate mac of packet (including mac1)
 
-	smac2 := len(msg) - blake2s.Size128
+	smac2 := len(msg) - wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE
 
-	var mac2 [blake2s.Size128]byte
+	var mac2 [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
 	func() {
 		mac, _ := blake2s.New128(cookie[:])
 		mac.Write(msg[:smac2])
@@ -138,7 +139,7 @@ func (st *CookieChecker) CreateReply(
 
 	// derive cookie
 
-	var cookie [blake2s.Size128]byte
+	var cookie [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
 	func() {
 		mac, _ := blake2s.New128(st.mac2.secret[:])
 		mac.Write(src)
@@ -149,8 +150,8 @@ func (st *CookieChecker) CreateReply(
 
 	size := len(msg)
 
-	smac2 := size - blake2s.Size128
-	smac1 := smac2 - blake2s.Size128
+	smac2 := size - wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE
+	smac1 := smac2 - wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE
 
 	reply := new(MessageCookieReply)
 	reply.Type = MessageCookieReplyType
@@ -199,7 +200,7 @@ func (st *CookieGenerator) ConsumeReply(msg *MessageCookieReply) bool {
 		return false
 	}
 
-	var cookie [blake2s.Size128]byte
+	var cookie [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
 
 	xchapoly, _ := chacha20poly1305.NewX(st.mac2.encryptionKey[:])
 	_, err := xchapoly.Open(cookie[:0], msg.Nonce[:], msg.Cookie[:], st.mac2.lastMAC1[:])
@@ -215,8 +216,8 @@ func (st *CookieGenerator) ConsumeReply(msg *MessageCookieReply) bool {
 func (st *CookieGenerator) AddMacs(msg []byte) {
 	size := len(msg)
 
-	smac2 := size - blake2s.Size128
-	smac1 := smac2 - blake2s.Size128
+	smac2 := size - wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE
+	smac1 := smac2 - wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE
 
 	mac1 := msg[smac1:smac2]
 	mac2 := msg[smac2:]

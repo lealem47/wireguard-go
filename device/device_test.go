@@ -51,12 +51,11 @@ func uapiCfg(cfg ...string) string {
 // genConfigs generates a pair of configs that connect to each other.
 // The configs use distinct, probably-usable ports.
 func genConfigs(tb testing.TB) (cfgs, endpointCfgs [2]string) {
-	var key1, key2 NoisePrivateKey
-	_, err := rand.Read(key1[:])
-	if err != nil {
+	key1, err := newPrivateKey()
+        if err != nil {
 		tb.Errorf("unable to generate private key random bytes: %v", err)
 	}
-	_, err = rand.Read(key2[:])
+	key2, err := newPrivateKey()
 	if err != nil {
 		tb.Errorf("unable to generate private key random bytes: %v", err)
 	}
