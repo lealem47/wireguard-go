@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"testing"
 
+        wolfSSL "github.com/wolfssl/go-wolfssl"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/tun/tuntest"
 )
@@ -52,6 +53,12 @@ func assertNil(t *testing.T, err error) {
 
 func assertEqual(t *testing.T, a, b []byte) {
 	if !bytes.Equal(a, b) {
+		t.Fatal(a, "!=", b)
+	}
+}
+
+func assertIntEqual(t *testing.T, a, b int) {
+	if a != b {
 		t.Fatal(a, "!=", b)
 	}
 }
@@ -157,23 +164,21 @@ func TestNoiseHandshake(t *testing.T) {
 
 	func() {
 		testMsg := []byte("wireguard test message 1")
-		var err error
 		var out []byte
 		var nonce [12]byte
-		out = key1.send.Seal(out, nonce[:], testMsg, nil)
-		out, err = key2.receive.Open(out[:0], nonce[:], out, nil)
-		assertNil(t, err)
-		assertEqual(t, out, testMsg)
+                out, _ = wolfSSL.Wc_ChaCha20Poly1305_Appended_Tag_Encrypt(key1.send[:], nonce[:], nil, testMsg, out)
+                ret := wolfSSL.Wc_ChaCha20Poly1305_Appended_Tag_Decrypt(key2.receive[:], nonce[:], nil, out, out)
+		assertIntEqual(t, ret, 0)
+                assertEqual(t, out[:len(out)-wolfSSL.CHACHA20_POLY1305_AEAD_AUTHTAG_SIZE], testMsg)
 	}()
 
 	func() {
 		testMsg := []byte("wireguard test message 2")
-		var err error
 		var out []byte
 		var nonce [12]byte
-		out = key2.send.Seal(out, nonce[:], testMsg, nil)
-		out, err = key1.receive.Open(out[:0], nonce[:], out, nil)
-		assertNil(t, err)
-		assertEqual(t, out, testMsg)
+                out, _ = wolfSSL.Wc_ChaCha20Poly1305_Appended_Tag_Encrypt(key2.send[:], nonce[:], nil, testMsg, out)
+                ret := wolfSSL.Wc_ChaCha20Poly1305_Appended_Tag_Decrypt(key1.receive[:], nonce[:], nil, out, out)
+		assertIntEqual(t, ret, 0)
+                assertEqual(t, out[:len(out)-wolfSSL.CHACHA20_POLY1305_AEAD_AUTHTAG_SIZE], testMsg)
 	}()
 }

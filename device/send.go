@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+        wolfSSL "github.com/wolfssl/go-wolfssl"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
@@ -468,13 +469,9 @@ func (device *Device) RoutineEncryption(id int) {
 			// encrypt content and release to consumer
 
 			binary.LittleEndian.PutUint64(nonce[4:], elem.nonce)
-			elem.packet = elem.keypair.send.Seal(
-				header,
-				nonce[:],
-				elem.packet,
-				nil,
-			)
-		}
+                        elem.packet, _ = wolfSSL.Wc_ChaCha20Poly1305_Appended_Tag_Encrypt(elem.keypair.send[:], nonce[:], nil, elem.packet, header)
+                        elem.packet = append(header[:], elem.packet[:]...)
+                    }
 		elemsContainer.Unlock()
 	}
 }
