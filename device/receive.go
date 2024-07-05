@@ -14,7 +14,6 @@ import (
 	"time"
 
         wolfSSL "github.com/wolfssl/go-wolfssl"
-	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 	"golang.zx2c4.com/wireguard/conn"
@@ -238,7 +237,7 @@ func (device *Device) RoutineReceiveIncoming(maxBatchSize int, recv conn.Receive
 }
 
 func (device *Device) RoutineDecryption(id int) {
-	var nonce [chacha20poly1305.NonceSize]byte
+	var nonce [wolfSSL.CHACHA20_POLY1305_AEAD_NONCE_SIZE]byte
 
 	defer device.log.Verbosef("Routine: decryption worker %d - stopped", id)
 	device.log.Verbosef("Routine: decryption worker %d - started", id)

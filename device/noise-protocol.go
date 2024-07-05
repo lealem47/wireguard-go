@@ -13,8 +13,6 @@ import (
 	"bytes"
 
         wolfSSL "github.com/wolfssl/go-wolfssl"
-	"golang.org/x/crypto/chacha20poly1305"
-	"golang.org/x/crypto/poly1305"
 
 	"golang.zx2c4.com/wireguard/tai64n"
 )
@@ -65,7 +63,7 @@ const (
 	MessageResponseSize        = 92                                            // size of response message
 	MessageCookieReplySize     = 64                                            // size of cookie reply message
 	MessageTransportHeaderSize = 16                                            // size of data preceding content in transport message
-	MessageTransportSize       = MessageTransportHeaderSize + poly1305.TagSize // size of empty transport
+	MessageTransportSize       = MessageTransportHeaderSize + wolfSSL.CHACHA20_POLY1305_AEAD_AUTHTAG_SIZE   // size of empty transport
 	MessageKeepaliveSize       = MessageTransportSize                          // size of keepalive
 	MessageHandshakeSize       = MessageInitiationSize                         // size of largest handshake related message
 )
@@ -86,8 +84,8 @@ type MessageInitiation struct {
 	Type      uint32
 	Sender    uint32
 	Ephemeral NoisePublicKey
-	Static    [NoisePublicKeySize + poly1305.TagSize]byte
-	Timestamp [tai64n.TimestampSize + poly1305.TagSize]byte
+	Static    [NoisePublicKeySize + wolfSSL.CHACHA20_POLY1305_AEAD_AUTHTAG_SIZE]byte
+	Timestamp [tai64n.TimestampSize + wolfSSL.CHACHA20_POLY1305_AEAD_AUTHTAG_SIZE]byte
 	MAC1      [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
 	MAC2      [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
 }
@@ -97,7 +95,7 @@ type MessageResponse struct {
 	Sender    uint32
 	Receiver  uint32
 	Ephemeral NoisePublicKey
-	Empty     [poly1305.TagSize]byte
+	Empty     [wolfSSL.CHACHA20_POLY1305_AEAD_AUTHTAG_SIZE]byte
 	MAC1      [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
 	MAC2      [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
 }
@@ -112,8 +110,8 @@ type MessageTransport struct {
 type MessageCookieReply struct {
 	Type     uint32
 	Receiver uint32
-	Nonce    [chacha20poly1305.NonceSizeX]byte
-	Cookie   [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE + poly1305.TagSize]byte
+	Nonce    [wolfSSL.XCHACHA20_POLY1305_AEAD_NONCE_SIZE]byte
+	Cookie   [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE + wolfSSL.CHACHA20_POLY1305_AEAD_AUTHTAG_SIZE]byte
 }
 
 type Handshake struct {
@@ -136,7 +134,7 @@ type Handshake struct {
 var (
 	InitialChainKey [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
 	InitialHash     [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
-	ZeroNonce       [chacha20poly1305.NonceSize]byte
+	ZeroNonce       [wolfSSL.CHACHA20_POLY1305_AEAD_NONCE_SIZE]byte
 )
 
 func mixKey(dst, c *[wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte, data []byte) {
@@ -213,7 +211,7 @@ func (device *Device) CreateMessageInitiation(peer *Peer) (*MessageInitiation, e
 	if err != nil {
 		return nil, err
 	}
-	var key [chacha20poly1305.KeySize]byte
+	var key [wolfSSL.CHACHA20_POLY1305_AEAD_KEYSIZE]byte
 	KDF2(
 		&handshake.chainKey,
 		&key,
@@ -269,7 +267,7 @@ func (device *Device) ConsumeMessageInitiation(msg *MessageInitiation) *Peer {
 
 	// decrypt static key
 	var peerPK NoisePublicKey
-	var key [chacha20poly1305.KeySize]byte
+	var key [wolfSSL.CHACHA20_POLY1305_AEAD_KEYSIZE]byte
 	ss, err := device.staticIdentity.privateKey.sharedSecret(msg.Ephemeral)
 	if err != nil {
 		return nil
@@ -396,7 +394,7 @@ func (device *Device) CreateMessageResponse(peer *Peer) (*MessageResponse, error
 	// add preshared key
 
 	var tau [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
-	var key [chacha20poly1305.KeySize]byte
+	var key [wolfSSL.CHACHA20_POLY1305_AEAD_KEYSIZE]byte
 
 	KDF3(
 		&handshake.chainKey,
@@ -408,7 +406,7 @@ func (device *Device) CreateMessageResponse(peer *Peer) (*MessageResponse, error
 
 	handshake.mixHash(tau[:])
 
-        var testOut [NoisePublicKeySize + poly1305.TagSize]byte
+        var testOut [NoisePublicKeySize + wolfSSL.CHACHA20_POLY1305_AEAD_AUTHTAG_SIZE]byte
         var testIn [NoisePublicKeySize]byte
         wolfSSL.Wc_ChaCha20Poly1305_Encrypt(key[:], ZeroNonce[:], handshake.hash[:], testIn[:], testOut[:], msg.Empty[:])
         setZero(testOut[:])
@@ -475,7 +473,7 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 		// add preshared key (psk)
 
 		var tau [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
-		var key [chacha20poly1305.KeySize]byte
+		var key [wolfSSL.CHACHA20_POLY1305_AEAD_KEYSIZE]byte
 		KDF3(
 			&chainKey,
 			&tau,
@@ -487,9 +485,9 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 
 		// authenticate transcript
 
-                var testOut [NoisePublicKeySize + poly1305.TagSize]byte
+                var testOut [NoisePublicKeySize + wolfSSL.CHACHA20_POLY1305_AEAD_AUTHTAG_SIZE]byte
                 var testIn [NoisePublicKeySize]byte
-                var authTag [poly1305.TagSize]byte
+                var authTag [wolfSSL.CHACHA20_POLY1305_AEAD_AUTHTAG_SIZE]byte
                 wolfSSL.Wc_ChaCha20Poly1305_Encrypt(key[:], ZeroNonce[:], hash[:], testIn[:], testOut[:], authTag[:])
                 setZero(testOut[:])
 
@@ -535,8 +533,8 @@ func (peer *Peer) BeginSymmetricSession() error {
 	// derive keys
 
 	var isInitiator bool
-	var sendKey [chacha20poly1305.KeySize]byte
-	var recvKey [chacha20poly1305.KeySize]byte
+	var sendKey [wolfSSL.CHACHA20_POLY1305_AEAD_KEYSIZE]byte
+	var recvKey [wolfSSL.CHACHA20_POLY1305_AEAD_KEYSIZE]byte
 
 	if handshake.state == handshakeResponseConsumed {
 		KDF2(
