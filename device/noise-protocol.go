@@ -491,9 +491,7 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
                 wolfSSL.Wc_ChaCha20Poly1305_Encrypt(key[:], ZeroNonce[:], hash[:], testIn[:], testOut[:], authTag[:])
                 setZero(testOut[:])
 
-                if !bytes.Equal(authTag[:],msg.Empty[:]) {
-                    fmt.Printf("First is %x\n", authTag[:])
-                    fmt.Printf("Second is %x\n", msg.Empty[:])
+                if !bytes.Equal(authTag[:], msg.Empty[:]) {
                     return false
 		}
 		mixHash(&hash, &hash, msg.Empty[:])
