@@ -6,7 +6,6 @@
 package device
 
 import (
-	"crypto/hmac"
 	"sync"
 	"time"
 	"errors"
@@ -83,7 +82,7 @@ func (st *CookieChecker) CheckMAC1(msg []byte) bool {
         wolfSSL.Wc_Blake2sUpdate(&blake2s, msg[:smac1], len(msg[:smac1]))
         wolfSSL.Wc_Blake2sFinal(&blake2s, mac1[:], 0)
 
-	return hmac.Equal(mac1[:], msg[smac1:smac2])
+        return wolfSSL.ConstantCompare(mac1[:], msg[smac1:smac2], len(mac1)) == 1
 }
 
 func (st *CookieChecker) CheckMAC2(msg, src []byte) bool {
@@ -116,7 +115,7 @@ func (st *CookieChecker) CheckMAC2(msg, src []byte) bool {
                 wolfSSL.Wc_Blake2sFinal(&blake2s, mac2[:], 0)
         }()
 
-	return hmac.Equal(mac2[:], msg[smac2:])
+        return wolfSSL.ConstantCompare(mac2[:], msg[smac2:], len(mac2)) == 1
 }
 
 func (st *CookieChecker) CreateReply(
