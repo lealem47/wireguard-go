@@ -166,19 +166,39 @@ func TestNoiseHandshake(t *testing.T) {
 		testMsg := []byte("wireguard test message 1")
 		var out []byte
 		var nonce [12]byte
-                out, _ = wolfSSL.Wc_ChaCha20Poly1305_Appended_Tag_Encrypt(key1.send[:], nonce[:], nil, testMsg, out)
-                ret := wolfSSL.Wc_ChaCha20Poly1305_Appended_Tag_Decrypt(key2.receive[:], nonce[:], nil, out, out)
+                var aes wolfSSL.Aes
+
+                wolfSSL.Wc_AesInit(&aes, nil, wolfSSL.INVALID_DEVID)
+                wolfSSL.Wc_AesGcmSetKey(&aes, key1.send[:], len(key1.send[:]))
+                out, _ = wolfSSL.Wc_AesGcm_Appended_Tag_Encrypt(&aes, out, testMsg, nonce[:], nil)
+                wolfSSL.Wc_AesFree(&aes)
+
+                wolfSSL.Wc_AesInit(&aes, nil, wolfSSL.INVALID_DEVID)
+                wolfSSL.Wc_AesGcmSetKey(&aes, key2.receive[:], len(key2.receive[:]))
+                ret := wolfSSL.Wc_AesGcm_Appended_Tag_Decrypt(&aes, out, out, nonce[:], nil)
+                wolfSSL.Wc_AesFree(&aes)
+
 		assertIntEqual(t, ret, 0)
-                assertEqual(t, out[:len(out)-wolfSSL.CHACHA20_POLY1305_AEAD_AUTHTAG_SIZE], testMsg)
+                assertEqual(t, out[:len(out)-wolfSSL.AES_BLOCK_SIZE], testMsg)
 	}()
 
 	func() {
 		testMsg := []byte("wireguard test message 2")
 		var out []byte
 		var nonce [12]byte
-                out, _ = wolfSSL.Wc_ChaCha20Poly1305_Appended_Tag_Encrypt(key2.send[:], nonce[:], nil, testMsg, out)
-                ret := wolfSSL.Wc_ChaCha20Poly1305_Appended_Tag_Decrypt(key1.receive[:], nonce[:], nil, out, out)
+                var aes wolfSSL.Aes
+
+                wolfSSL.Wc_AesInit(&aes, nil, wolfSSL.INVALID_DEVID)
+                wolfSSL.Wc_AesGcmSetKey(&aes, key2.send[:], len(key2.send[:]))
+                out, _ = wolfSSL.Wc_AesGcm_Appended_Tag_Encrypt(&aes, out, testMsg, nonce[:], nil)
+                wolfSSL.Wc_AesFree(&aes)
+
+                wolfSSL.Wc_AesInit(&aes, nil, wolfSSL.INVALID_DEVID)
+                wolfSSL.Wc_AesGcmSetKey(&aes, key1.receive[:], len(key1.receive[:]))
+                ret := wolfSSL.Wc_AesGcm_Appended_Tag_Decrypt(&aes, out, out, nonce[:], nil)
+                wolfSSL.Wc_AesFree(&aes)
+
 		assertIntEqual(t, ret, 0)
-                assertEqual(t, out[:len(out)-wolfSSL.CHACHA20_POLY1305_AEAD_AUTHTAG_SIZE], testMsg)
+                assertEqual(t, out[:len(out)-wolfSSL.AES_BLOCK_SIZE], testMsg)
 	}()
 }

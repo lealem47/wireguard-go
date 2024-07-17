@@ -21,7 +21,7 @@ type CookieChecker struct {
 	mac2 struct {
 		secret        [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
 		secretSet     time.Time
-		encryptionKey [wolfSSL.CHACHA20_POLY1305_AEAD_KEYSIZE]byte
+		encryptionKey [wolfSSL.AES_256_KEY_SIZE]byte
 	}
 }
 
@@ -35,7 +35,7 @@ type CookieGenerator struct {
 		cookieSet     time.Time
 		hasLastMAC1   bool
 		lastMAC1      [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
-		encryptionKey [wolfSSL.CHACHA20_POLY1305_AEAD_KEYSIZE]byte
+		encryptionKey [wolfSSL.AES_256_KEY_SIZE]byte
 	}
 }
 

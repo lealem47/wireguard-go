@@ -443,7 +443,7 @@ func calculatePaddingSize(packetSize, mtu int) int {
  */
 func (device *Device) RoutineEncryption(id int) {
 	var paddingZeros [PaddingMultiple]byte
-	var nonce [wolfSSL.CHACHA20_POLY1305_AEAD_NONCE_SIZE]byte
+	var nonce [wolfSSL.AES_IV_SIZE]byte
 
 	defer device.log.Verbosef("Routine: encryption worker %d - stopped", id)
 	device.log.Verbosef("Routine: encryption worker %d - started", id)
@@ -468,7 +468,13 @@ func (device *Device) RoutineEncryption(id int) {
 			// encrypt content and release to consumer
 
 			binary.LittleEndian.PutUint64(nonce[4:], elem.nonce)
-                        elem.packet, _ = wolfSSL.Wc_ChaCha20Poly1305_Appended_Tag_Encrypt(elem.keypair.send[:], nonce[:], nil, elem.packet, header)
+
+                        var aes wolfSSL.Aes
+                        wolfSSL.Wc_AesInit(&aes, nil, wolfSSL.INVALID_DEVID)
+                        wolfSSL.Wc_AesGcmSetKey(&aes, elem.keypair.send[:], len(elem.keypair.send[:]))
+                        elem.packet, _ = wolfSSL.Wc_AesGcm_Appended_Tag_Encrypt(&aes, header, elem.packet, nonce[:], nil)
+                        wolfSSL.Wc_AesFree(&aes)
+
                         elem.packet = append(header[:], elem.packet[:]...)
                         setZero(elem.keypair.send[:])
                     }

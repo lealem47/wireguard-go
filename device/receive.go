@@ -237,7 +237,7 @@ func (device *Device) RoutineReceiveIncoming(maxBatchSize int, recv conn.Receive
 }
 
 func (device *Device) RoutineDecryption(id int) {
-	var nonce [wolfSSL.CHACHA20_POLY1305_AEAD_NONCE_SIZE]byte
+	var nonce [wolfSSL.AES_IV_SIZE]byte
 
 	defer device.log.Verbosef("Routine: decryption worker %d - stopped", id)
 	device.log.Verbosef("Routine: decryption worker %d - started", id)
@@ -252,11 +252,17 @@ func (device *Device) RoutineDecryption(id int) {
 			elem.counter = binary.LittleEndian.Uint64(counter)
 			// copy counter to nonce
 			binary.LittleEndian.PutUint64(nonce[0x4:0xc], elem.counter)
-                        ret := wolfSSL.Wc_ChaCha20Poly1305_Appended_Tag_Decrypt(elem.keypair.receive[:], nonce[:], nil, content, elem.packet)
+
+                        var aes wolfSSL.Aes
+                        wolfSSL.Wc_AesInit(&aes, nil, wolfSSL.INVALID_DEVID)
+                        wolfSSL.Wc_AesGcmSetKey(&aes, elem.keypair.receive[:], len(elem.keypair.receive[:]))
+                        ret := wolfSSL.Wc_AesGcm_Appended_Tag_Decrypt(&aes, elem.packet, content, nonce[:], nil)
+                        wolfSSL.Wc_AesFree(&aes)
+
 			if ret < 0 {
 				elem.packet = nil
 			} else {
-                            elem.packet = elem.packet[:len(elem.packet)-(wolfSSL.CHACHA20_POLY1305_AEAD_AUTHTAG_SIZE*2)]
+                            elem.packet = elem.packet[:len(elem.packet)-(wolfSSL.AES_BLOCK_SIZE*2)]
                             copy(content[:],elem.packet[:])
                         }
                         setZero(elem.keypair.receive[:])
