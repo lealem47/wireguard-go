@@ -259,6 +259,7 @@ func (device *Device) RoutineDecryption(id int) {
                             elem.packet = elem.packet[:len(elem.packet)-(wolfSSL.CHACHA20_POLY1305_AEAD_AUTHTAG_SIZE*2)]
                             copy(content[:],elem.packet[:])
                         }
+                        setZero(elem.keypair.receive[:])
                     }
 		elemsContainer.Unlock()
 	}

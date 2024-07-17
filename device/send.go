@@ -470,6 +470,7 @@ func (device *Device) RoutineEncryption(id int) {
 			binary.LittleEndian.PutUint64(nonce[4:], elem.nonce)
                         elem.packet, _ = wolfSSL.Wc_ChaCha20Poly1305_Appended_Tag_Encrypt(elem.keypair.send[:], nonce[:], nil, elem.packet, header)
                         elem.packet = append(header[:], elem.packet[:]...)
+                        setZero(elem.keypair.send[:])
                     }
 		elemsContainer.Unlock()
 	}
