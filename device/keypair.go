@@ -22,8 +22,8 @@ import (
 
 type Keypair struct {
 	sendNonce    atomic.Uint64
-	send         [NoisePublicKeySize]byte
-	receive      [NoisePublicKeySize]byte
+	send         [32]byte
+	receive      [32]byte
 	replayFilter replay.Filter
 	isInitiator  bool
 	created      time.Time

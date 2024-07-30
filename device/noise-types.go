@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	NoisePublicKeySize    = 32
+	NoisePublicKeySize    = 65 /* Size of uncompressed P256 public key */
 	NoisePrivateKeySize   = 32
 	NoisePresharedKeySize = 32
 )

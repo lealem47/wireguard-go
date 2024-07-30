@@ -8,6 +8,7 @@ package device
 import (
         wolfSSL "github.com/wolfssl/go-wolfssl"
 	"errors"
+	"fmt"
     )
 
 /* KDF related functions.
@@ -15,31 +16,31 @@ import (
  * https://tools.ietf.org/html/rfc5869
  */
 
-func HMAC1(sum *[wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte, key, in0 []byte) {
+func HMAC1(sum []byte, key, in0 []byte) {
         wolfSSL.Wc_Blake2s_HMAC(sum[:], in0, key, wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE)
 }
 
-func HMAC2(sum *[wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte, key, in0, in1 []byte) {
+func HMAC2(sum []byte, key, in0, in1 []byte) {
         in := append(in0, in1...)
         wolfSSL.Wc_Blake2s_HMAC(sum[:], in, key, wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE)
 }
 
-func KDF1(t0 *[wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte, key, input []byte) {
+func KDF1(t0 []byte, key, input []byte) {
 	HMAC1(t0, key, input)
 	HMAC1(t0, t0[:], []byte{0x1})
 }
 
-func KDF2(t0, t1 *[wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte, key, input []byte) {
+func KDF2(t0, t1 []byte, key, input []byte) {
 	var prk [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
-	HMAC1(&prk, key, input)
+        HMAC1(prk[:], key, input)
 	HMAC1(t0, prk[:], []byte{0x1})
 	HMAC2(t1, prk[:], t0[:], []byte{0x2})
 	setZero(prk[:])
 }
 
-func KDF3(t0, t1, t2 *[wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte, key, input []byte) {
+func KDF3(t0, t1, t2 []byte, key, input []byte) {
 	var prk [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
-	HMAC1(&prk, key, input)
+        HMAC1(prk[:], key, input)
 	HMAC1(t0, prk[:], []byte{0x1})
 	HMAC2(t1, prk[:], t0[:], []byte{0x2})
 	HMAC2(t2, prk[:], t1[:], []byte{0x3})
@@ -64,45 +65,92 @@ func setZero(arr []byte) {
 
 func newPrivateKey() (sk NoisePrivateKey, err error) {
         var rng wolfSSL.WC_RNG
+        var key wolfSSL.Ecc_key
+
+        if ret := wolfSSL.Wc_ecc_init(&key); ret != 0 {
+            return sk, errors.New("Failed to initialize ECC key")
+        }
 
         wolfSSL.Wc_InitRng(&rng)
 
-        wolfSSL.Wc_curve25519_make_priv(&rng, sk[:])
+        keySize := NoisePrivateKeySize
+        if ret := wolfSSL.Wc_ecc_make_key(&rng, keySize, &key); ret != 0 {
+            wolfSSL.Wc_FreeRng(&rng)
+            wolfSSL.Wc_ecc_free(&key)
+            return sk, errors.New("Failed to make ECC key")
+        }
 
-        wolfSSL.Wc_FreeRng(&rng)
+        skLen := len(sk[:])
+        if ret := wolfSSL.Wc_ecc_export_private_only(&key, sk[:], &skLen); ret != 0 {
+            wolfSSL.Wc_FreeRng(&rng)
+            wolfSSL.Wc_ecc_free(&key)
+            return sk, errors.New("Failed to export private ECC key")
+        }
 
-        return
+        return sk, nil
 }
 
 func (sk *NoisePrivateKey) publicKey() (pk NoisePublicKey) {
-	apk := (*[NoisePublicKeySize]byte)(&pk)
+        var key wolfSSL.Ecc_key
+
+        apk := (*[NoisePublicKeySize]byte)(&pk)
 	ask := (*[NoisePrivateKeySize]byte)(sk)
 
-        wolfSSL.Wc_curve25519_make_pub(apk[:], ask[:])
+        askSz := len(ask[:])
+        apkSz := len(apk[:])
+
+        wolfSSL.Wc_ecc_init(&key)
+
+        wolfSSL.Wc_ecc_import_private_key_ex(ask[:], askSz, nil, 0, &key, wolfSSL.ECC_SECP256R1)
+        wolfSSL.Wc_ecc_make_pub(&key, nil)
+        wolfSSL.Wc_ecc_export_x963_ex(&key, apk[:], &apkSz, 0)
+
+        wolfSSL.Wc_ecc_free(&key)
 
         return
 }
 
 var errInvalidPublicKey = errors.New("invalid public key")
 
-func (sk *NoisePrivateKey) sharedSecret(pk NoisePublicKey) (ss [NoisePublicKeySize]byte, err error) {
-        var privKey wolfSSL.Curve25519_key
-        var pubKey wolfSSL.Curve25519_key
+func (sk *NoisePrivateKey) sharedSecret(pk NoisePublicKey) (ss [NoisePrivateKeySize]byte, err error) {
+        var privKey wolfSSL.Ecc_key
+        var pubKey  wolfSSL.Ecc_key
+        var rng wolfSSL.WC_RNG
 
         apk := (*[NoisePublicKeySize]byte)(&pk)
 	ask := (*[NoisePrivateKeySize]byte)(sk)
 
-        wolfSSL.Wc_curve25519_init(&privKey)
-        wolfSSL.Wc_curve25519_init(&pubKey)
+        wolfSSL.Wc_ecc_init(&privKey)
+        wolfSSL.Wc_ecc_init(&pubKey)
 
+        if ret := wolfSSL.Wc_ecc_import_private_key_ex(ask[:], len(ask[:]), nil, 0, &privKey, wolfSSL.ECC_SECP256R1); ret != 0 {
+            wolfSSL.Wc_ecc_free(&privKey)
+            wolfSSL.Wc_ecc_free(&pubKey)
+            return ss, errors.New("Failed import private ECC key")
+        }
 
-        wolfSSL.Wc_curve25519_import_private(ask[:], &privKey)
-        wolfSSL.Wc_curve25519_import_public(apk[:], &pubKey)
-        
-        wolfSSL.Wc_curve25519_shared_secret(&privKey, &pubKey, ss[:])
+        if ret := wolfSSL.Wc_ecc_import_x963_ex(apk[:], len(apk[:]), &pubKey, wolfSSL.ECC_SECP256R1); ret != 0 {
+            wolfSSL.Wc_ecc_free(&privKey)
+            wolfSSL.Wc_ecc_free(&pubKey)
+            return ss, errors.New("Failed import public ECC key")
+        }
+       
+        ssSz := len(ss[:])
 
-        wolfSSL.Wc_curve25519_free(&privKey)
-        wolfSSL.Wc_curve25519_free(&pubKey)
+        wolfSSL.Wc_InitRng(&rng)
+
+        //wolfSSL.Wc_ecc_set_rng(&privKey, &rng)
+
+        if ret := wolfSSL.Wc_ecc_shared_secret(&privKey, &pubKey, ss[:], &ssSz); ret != 0 {
+            wolfSSL.Wc_ecc_free(&privKey)
+            wolfSSL.Wc_ecc_free(&pubKey)
+            wolfSSL.Wc_FreeRng(&rng)
+            return ss, errors.New("Failed create ECC shared secret")
+        }
+
+        wolfSSL.Wc_FreeRng(&rng)
+        wolfSSL.Wc_ecc_free(&privKey)
+        wolfSSL.Wc_ecc_free(&pubKey)
 
         return ss, nil
 }

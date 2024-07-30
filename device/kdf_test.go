@@ -55,7 +55,7 @@ func TestKDF(t *testing.T) {
 	for _, test := range tests {
 		key, _ := hex.DecodeString(test.key)
 		input, _ := hex.DecodeString(test.input)
-		KDF3(&t0, &t1, &t2, key, input)
+                KDF3(t0[:], t1[:], t2[:], key, input)
 		t0s := hex.EncodeToString(t0[:])
 		t1s := hex.EncodeToString(t1[:])
 		t2s := hex.EncodeToString(t2[:])
@@ -67,7 +67,7 @@ func TestKDF(t *testing.T) {
 	for _, test := range tests {
 		key, _ := hex.DecodeString(test.key)
 		input, _ := hex.DecodeString(test.input)
-		KDF2(&t0, &t1, key, input)
+                KDF2(t0[:], t1[:], key, input)
 		t0s := hex.EncodeToString(t0[:])
 		t1s := hex.EncodeToString(t1[:])
 		assertEquals(t, t0s, test.t0)
@@ -77,7 +77,7 @@ func TestKDF(t *testing.T) {
 	for _, test := range tests {
 		key, _ := hex.DecodeString(test.key)
 		input, _ := hex.DecodeString(test.input)
-		KDF1(&t0, key, input)
+                KDF1(t0[:], key, input)
 		t0s := hex.EncodeToString(t0[:])
 		assertEquals(t, t0s, test.t0)
 	}
