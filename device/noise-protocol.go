@@ -45,7 +45,7 @@ func (hs handshakeState) String() string {
 }
 
 const (
-	NoiseConstruction = "Noise_IKpsk2_ECC_256_AesGcm_SHA"
+	NoiseConstruction = "Noise_IKpsk2_ECC_256_AesGcm_SHA256"
 	WGIdentifier      = "WireGuard v1 zx2c4 Jason@zx2c4.com"
 	WGLabelMAC1       = "mac1----"
 	WGLabelCookie     = "cookie--"
@@ -60,8 +60,8 @@ const (
 
 const (
 	MessageInitiationSize      = 246                                           // size of handshake initiation message
-	MessageResponseSize        = 157                                            // size of response message
-	MessageCookieReplySize     = 96                                            // size of cookie reply message
+	MessageResponseSize        = 157                                           // size of response message
+	MessageCookieReplySize     = 72                                            // size of cookie reply message
 	MessageTransportHeaderSize = 16                                            // size of data preceding content in transport message
 	MessageTransportSize       = MessageTransportHeaderSize + wolfSSL.AES_BLOCK_SIZE   // size of empty transport
 	MessageKeepaliveSize       = MessageTransportSize                          // size of keepalive
@@ -110,7 +110,7 @@ type MessageTransport struct {
 type MessageCookieReply struct {
 	Type     uint32
 	Receiver uint32
-	Nonce    [wolfSSL.XCHACHA20_POLY1305_AEAD_NONCE_SIZE]byte
+	Nonce    [wolfSSL.AES_IV_SIZE]byte
 	Cookie   [wolfSSL.WC_SHA256_DIGEST_SIZE + wolfSSL.AES_BLOCK_SIZE]byte
 }
 

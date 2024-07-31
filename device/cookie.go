@@ -182,7 +182,11 @@ func (st *CookieChecker) CreateReply(
                 return nil, errors.New("RNG failed")
         }
 
-        wolfSSL.Wc_XChaCha20Poly1305_Encrypt(reply.Cookie[:], cookie[:], msg[smac1:smac2], reply.Nonce[:], st.mac2.encryptionKey[:])
+        var aes wolfSSL.Aes
+        wolfSSL.Wc_AesInit(&aes, nil, wolfSSL.INVALID_DEVID)
+        wolfSSL.Wc_AesGcmSetKey(&aes, st.mac2.encryptionKey[:], len(st.mac2.encryptionKey[:]))
+        wolfSSL.Wc_AesGcm_Appended_Tag_Encrypt(&aes, reply.Cookie[:], cookie[:], reply.Nonce[:], msg[smac1:smac2])
+        wolfSSL.Wc_AesFree(&aes)
 
 	st.RUnlock()
 
@@ -226,7 +230,13 @@ func (st *CookieGenerator) ConsumeReply(msg *MessageCookieReply) bool {
 
 	var cookie [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 
-        ret := wolfSSL.Wc_XChaCha20Poly1305_Decrypt(cookie[:], msg.Cookie[:], st.mac2.lastMAC1[:], msg.Nonce[:], st.mac2.encryptionKey[:])
+
+        var aes wolfSSL.Aes
+        wolfSSL.Wc_AesInit(&aes, nil, wolfSSL.INVALID_DEVID)
+        wolfSSL.Wc_AesGcmSetKey(&aes, st.mac2.encryptionKey[:], len(st.mac2.encryptionKey[:]))
+        ret := wolfSSL.Wc_AesGcm_Appended_Tag_Decrypt(&aes, cookie[:], msg.Cookie[:], msg.Nonce[:], st.mac2.lastMAC1[:])
+        wolfSSL.Wc_AesFree(&aes)
+
 	if ret < 0 {
 		return false
 	}
