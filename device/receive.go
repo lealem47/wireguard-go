@@ -256,14 +256,14 @@ func (device *Device) RoutineDecryption(id int) {
                         var aes wolfSSL.Aes
                         wolfSSL.Wc_AesInit(&aes, nil, wolfSSL.INVALID_DEVID)
                         wolfSSL.Wc_AesGcmSetKey(&aes, elem.keypair.receive[:], len(elem.keypair.receive[:]))
-                        ret := wolfSSL.Wc_AesGcm_Appended_Tag_Decrypt(&aes, elem.packet, content, nonce[:], nil)
+                        ret := wolfSSL.Wc_AesGcm_Appended_Tag_Decrypt(&aes, content, content, nonce[:], nil)
                         wolfSSL.Wc_AesFree(&aes)
 
 			if ret < 0 {
 				elem.packet = nil
 			} else {
-                            elem.packet = elem.packet[:len(elem.packet)-(wolfSSL.AES_BLOCK_SIZE*2)]
-                            copy(content[:],elem.packet[:])
+                            elem.packet = elem.packet[16:]
+                            elem.packet = elem.packet[:len(elem.packet)-16]
                         }
                         setZero(elem.keypair.receive[:])
                     }

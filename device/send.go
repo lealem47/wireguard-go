@@ -472,7 +472,7 @@ func (device *Device) RoutineEncryption(id int) {
                         var aes wolfSSL.Aes
                         wolfSSL.Wc_AesInit(&aes, nil, wolfSSL.INVALID_DEVID)
                         wolfSSL.Wc_AesGcmSetKey(&aes, elem.keypair.send[:], len(elem.keypair.send[:]))
-                        elem.packet, _ = wolfSSL.Wc_AesGcm_Appended_Tag_Encrypt(&aes, header, elem.packet, nonce[:], nil)
+                        elem.packet, _ = wolfSSL.Wc_AesGcm_Appended_Tag_Encrypt(&aes, elem.packet, elem.packet, nonce[:], nil)
                         wolfSSL.Wc_AesFree(&aes)
 
                         elem.packet = append(header[:], elem.packet[:]...)
