@@ -12,5 +12,8 @@ require (
 
 require (
 	github.com/google/btree v1.0.1 // indirect
+	github.com/wolfssl/go-wolfssl v0.0.0-20240213174306-9af0bc9f07ef // indirect
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
 )
+
+replace github.com/wolfssl/go-wolfssl => /Users/lealemamedie/Projects/go-wolfssl

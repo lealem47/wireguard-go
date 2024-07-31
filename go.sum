@@ -1,5 +1,7 @@
 github.com/google/btree v1.0.1 h1:gK4Kx5IaGY9CD5sPJ36FHiBJ6ZXl0kilRiiCj+jdYp4=
 github.com/google/btree v1.0.1/go.mod h1:xXMiIv4Fb/0kKde4SpL7qlzvu5cMJDRkFDxJfI9uaxA=
+github.com/wolfssl/go-wolfssl v0.0.0-20240213174306-9af0bc9f07ef h1:6IT+wAQ9BExc4UZMgMztKkco1GBGDFp50YYzdj7CaU4=
+github.com/wolfssl/go-wolfssl v0.0.0-20240213174306-9af0bc9f07ef/go.mod h1:9UPXScenNMa3pnG2ef+Iw9aKwmWENzEdxZysKrFoyQI=
 golang.org/x/crypto v0.13.0 h1:mvySKfSWJ+UKUii46M40LOvyWfN0s2U+46/jDd0e6Ck=
 golang.org/x/crypto v0.13.0/go.mod h1:y6Z2r+Rw4iayiXXAIxJIDAJ1zMW4yaTpebo8fPOliYc=
 golang.org/x/net v0.15.0 h1:ugBLEUaxABaB5AJqW9enI0ACdci2RUd4eP51NTBvuJ8=
