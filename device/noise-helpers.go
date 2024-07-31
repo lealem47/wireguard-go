@@ -8,7 +8,6 @@ package device
 import (
         wolfSSL "github.com/wolfssl/go-wolfssl"
 	"errors"
-	"fmt"
     )
 
 /* KDF related functions.
@@ -17,12 +16,22 @@ import (
  */
 
 func HMAC1(sum []byte, key, in0 []byte) {
-        wolfSSL.Wc_Blake2s_HMAC(sum[:], in0, key, wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE)
+        var hmac wolfSSL.Hmac
+        wolfSSL.Wc_HmacInit(&hmac, nil, wolfSSL.INVALID_DEVID)
+        wolfSSL.Wc_HmacSetKey(&hmac, wolfSSL.WC_SHA256, key, len(key[:]))
+        wolfSSL.Wc_HmacUpdate(&hmac, in0, len(in0[:]))
+        wolfSSL.Wc_HmacFinal(&hmac, sum)
+        wolfSSL.Wc_HmacFree(&hmac)
 }
 
 func HMAC2(sum []byte, key, in0, in1 []byte) {
-        in := append(in0, in1...)
-        wolfSSL.Wc_Blake2s_HMAC(sum[:], in, key, wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE)
+        var hmac wolfSSL.Hmac
+        wolfSSL.Wc_HmacInit(&hmac, nil, wolfSSL.INVALID_DEVID)
+        wolfSSL.Wc_HmacSetKey(&hmac, wolfSSL.WC_SHA256, key, len(key[:]))
+        wolfSSL.Wc_HmacUpdate(&hmac, in0, len(in0[:]))
+        wolfSSL.Wc_HmacUpdate(&hmac, in1, len(in1[:]))
+        wolfSSL.Wc_HmacFinal(&hmac, sum)
+        wolfSSL.Wc_HmacFree(&hmac)
 }
 
 func KDF1(t0 []byte, key, input []byte) {
@@ -31,7 +40,7 @@ func KDF1(t0 []byte, key, input []byte) {
 }
 
 func KDF2(t0, t1 []byte, key, input []byte) {
-	var prk [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
+	var prk [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
         HMAC1(prk[:], key, input)
 	HMAC1(t0, prk[:], []byte{0x1})
 	HMAC2(t1, prk[:], t0[:], []byte{0x2})
@@ -39,7 +48,7 @@ func KDF2(t0, t1 []byte, key, input []byte) {
 }
 
 func KDF3(t0, t1, t2 []byte, key, input []byte) {
-	var prk [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
+	var prk [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
         HMAC1(prk[:], key, input)
 	HMAC1(t0, prk[:], []byte{0x1})
 	HMAC2(t1, prk[:], t0[:], []byte{0x2})

@@ -16,10 +16,10 @@ import (
 type CookieChecker struct {
 	sync.RWMutex
 	mac1 struct {
-		key [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
+		key [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 	}
 	mac2 struct {
-		secret        [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
+		secret        [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 		secretSet     time.Time
 		encryptionKey [wolfSSL.AES_256_KEY_SIZE]byte
 	}
@@ -28,13 +28,13 @@ type CookieChecker struct {
 type CookieGenerator struct {
 	sync.RWMutex
 	mac1 struct {
-		key [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
+		key [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 	}
 	mac2 struct {
-		cookie        [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
+		cookie        [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 		cookieSet     time.Time
 		hasLastMAC1   bool
-		lastMAC1      [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
+		lastMAC1      [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 		encryptionKey [wolfSSL.AES_256_KEY_SIZE]byte
 	}
 }
@@ -46,21 +46,23 @@ func (st *CookieChecker) Init(pk NoisePublicKey) {
 	// mac1 state
 
 	func() {
-                var blake2s wolfSSL.Blake2s
-                wolfSSL.Wc_InitBlake2s(&blake2s, wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE)
-                wolfSSL.Wc_Blake2sUpdate(&blake2s, []byte(WGLabelMAC1), len([]byte(WGLabelMAC1)))
-                wolfSSL.Wc_Blake2sUpdate(&blake2s, pk[:], len(pk[:]))
-                wolfSSL.Wc_Blake2sFinal(&blake2s, st.mac1.key[:], 0)
+                var sha wolfSSL.Wc_Sha256
+                wolfSSL.Wc_InitSha256_ex(&sha, nil, wolfSSL.INVALID_DEVID)
+                wolfSSL.Wc_Sha256Update(&sha, []byte(WGLabelMAC1), len([]byte(WGLabelMAC1)))
+                wolfSSL.Wc_Sha256Update(&sha, pk[:], len(pk[:]))
+                wolfSSL.Wc_Sha256Final(&sha, st.mac1.key[:])
+                wolfSSL.Wc_Sha256Free(&sha)
         }()
 
 	// mac2 state
 
 	func() {
-                var blake2s wolfSSL.Blake2s
-                wolfSSL.Wc_InitBlake2s(&blake2s, wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE)
-                wolfSSL.Wc_Blake2sUpdate(&blake2s, []byte(WGLabelCookie), len([]byte(WGLabelCookie)))
-                wolfSSL.Wc_Blake2sUpdate(&blake2s, pk[:], len(pk[:]))
-                wolfSSL.Wc_Blake2sFinal(&blake2s, st.mac2.encryptionKey[:], 0)
+                var sha wolfSSL.Wc_Sha256
+                wolfSSL.Wc_InitSha256_ex(&sha, nil, wolfSSL.INVALID_DEVID)
+                wolfSSL.Wc_Sha256Update(&sha, []byte(WGLabelCookie), len([]byte(WGLabelCookie)))
+                wolfSSL.Wc_Sha256Update(&sha, pk[:], len(pk[:]))
+                wolfSSL.Wc_Sha256Final(&sha, st.mac2.encryptionKey[:])
+                wolfSSL.Wc_Sha256Free(&sha)
 	}()
 
 	st.mac2.secretSet = time.Time{}
@@ -71,16 +73,17 @@ func (st *CookieChecker) CheckMAC1(msg []byte) bool {
 	defer st.RUnlock()
 
 	size := len(msg)
-	smac2 := size - wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE
-	smac1 := smac2 - wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE
+	smac2 := size - wolfSSL.WC_SHA256_DIGEST_SIZE
+	smac1 := smac2 - wolfSSL.WC_SHA256_DIGEST_SIZE
 
-	var mac1 [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
+	var mac1 [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 
-                
-        var blake2s wolfSSL.Blake2s
-        wolfSSL.Wc_InitBlake2s_WithKey(&blake2s, wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE, st.mac1.key[:])
-        wolfSSL.Wc_Blake2sUpdate(&blake2s, msg[:smac1], len(msg[:smac1]))
-        wolfSSL.Wc_Blake2sFinal(&blake2s, mac1[:], 0)
+        var hmac wolfSSL.Hmac
+        wolfSSL.Wc_HmacInit(&hmac, nil, wolfSSL.INVALID_DEVID)
+        wolfSSL.Wc_HmacSetKey(&hmac, wolfSSL.WC_SHA256, st.mac1.key[:], len(st.mac1.key[:]))
+        wolfSSL.Wc_HmacUpdate(&hmac, msg[:smac1], len(msg[:smac1]))
+        wolfSSL.Wc_HmacFinal(&hmac, mac1[:])
+        wolfSSL.Wc_HmacFree(&hmac)
 
         return wolfSSL.ConstantCompare(mac1[:], msg[smac1:smac2], len(mac1)) == 1
 }
@@ -95,24 +98,28 @@ func (st *CookieChecker) CheckMAC2(msg, src []byte) bool {
 
 	// derive cookie key
 
-	var cookie [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
+	var cookie [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 	func() {
-                var blake2s wolfSSL.Blake2s
-                wolfSSL.Wc_InitBlake2s_WithKey(&blake2s, wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE, st.mac2.secret[:])
-                wolfSSL.Wc_Blake2sUpdate(&blake2s, src, len(src))
-                wolfSSL.Wc_Blake2sFinal(&blake2s, cookie[:], 0)
-	}()
+                var hmac wolfSSL.Hmac
+                wolfSSL.Wc_HmacInit(&hmac, nil, wolfSSL.INVALID_DEVID)
+                wolfSSL.Wc_HmacSetKey(&hmac, wolfSSL.WC_SHA256, st.mac2.secret[:], len(st.mac2.secret[:]))
+                wolfSSL.Wc_HmacUpdate(&hmac, src, len(src))
+                wolfSSL.Wc_HmacFinal(&hmac, cookie[:])
+                wolfSSL.Wc_HmacFree(&hmac)
+        }()
 
 	// calculate mac of packet (including mac1)
 
-	smac2 := len(msg) - wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE
+	smac2 := len(msg) - wolfSSL.WC_SHA256_DIGEST_SIZE
 
-	var mac2 [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
+	var mac2 [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 	func() {
-                var blake2s wolfSSL.Blake2s
-                wolfSSL.Wc_InitBlake2s_WithKey(&blake2s, wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE, cookie[:])
-                wolfSSL.Wc_Blake2sUpdate(&blake2s, msg[:smac2], len(msg[:smac2]))
-                wolfSSL.Wc_Blake2sFinal(&blake2s, mac2[:], 0)
+                var hmac wolfSSL.Hmac
+                wolfSSL.Wc_HmacInit(&hmac, nil, wolfSSL.INVALID_DEVID)
+                wolfSSL.Wc_HmacSetKey(&hmac, wolfSSL.WC_SHA256, cookie[:], len(cookie[:]))
+                wolfSSL.Wc_HmacUpdate(&hmac, msg[:smac2], len(msg[:smac2]))
+                wolfSSL.Wc_HmacFinal(&hmac, mac2[:])
+                wolfSSL.Wc_HmacFree(&hmac)
         }()
 
         return wolfSSL.ConstantCompare(mac2[:], msg[smac2:], len(mac2)) == 1
@@ -145,20 +152,22 @@ func (st *CookieChecker) CreateReply(
 
 	// derive cookie
 
-	var cookie [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
+	var cookie [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 	func() {
-                var blake2s wolfSSL.Blake2s
-                wolfSSL.Wc_InitBlake2s_WithKey(&blake2s, wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE, st.mac2.secret[:])
-                wolfSSL.Wc_Blake2sUpdate(&blake2s, src, len(src))
-                wolfSSL.Wc_Blake2sFinal(&blake2s, cookie[:], 0)
+                var hmac wolfSSL.Hmac
+                wolfSSL.Wc_HmacInit(&hmac, nil, wolfSSL.INVALID_DEVID)
+                wolfSSL.Wc_HmacSetKey(&hmac, wolfSSL.WC_SHA256, st.mac2.secret[:], len(st.mac2.secret[:]))
+                wolfSSL.Wc_HmacUpdate(&hmac, src, len(src))
+                wolfSSL.Wc_HmacFinal(&hmac, cookie[:])
+                wolfSSL.Wc_HmacFree(&hmac)
         }()
 
 	// encrypt cookie
 
 	size := len(msg)
 
-	smac2 := size - wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE
-	smac1 := smac2 - wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE
+	smac2 := size - wolfSSL.WC_SHA256_DIGEST_SIZE
+	smac1 := smac2 - wolfSSL.WC_SHA256_DIGEST_SIZE
 
 	reply := new(MessageCookieReply)
 	reply.Type = MessageCookieReplyType
@@ -185,20 +194,22 @@ func (st *CookieGenerator) Init(pk NoisePublicKey) {
 	defer st.Unlock()
 
 	func() {
-                var blake2s wolfSSL.Blake2s
-                wolfSSL.Wc_InitBlake2s(&blake2s, wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE)
-                wolfSSL.Wc_Blake2sUpdate(&blake2s, []byte(WGLabelMAC1), len([]byte(WGLabelMAC1)))
-                wolfSSL.Wc_Blake2sUpdate(&blake2s, pk[:], len(pk[:]))
-                wolfSSL.Wc_Blake2sFinal(&blake2s, st.mac1.key[:], 0)
+                var sha wolfSSL.Wc_Sha256
+                wolfSSL.Wc_InitSha256_ex(&sha, nil, wolfSSL.INVALID_DEVID)
+                wolfSSL.Wc_Sha256Update(&sha, []byte(WGLabelMAC1), len([]byte(WGLabelMAC1)))
+                wolfSSL.Wc_Sha256Update(&sha, pk[:], len(pk[:]))
+                wolfSSL.Wc_Sha256Final(&sha, st.mac1.key[:])
+                wolfSSL.Wc_Sha256Free(&sha)
 
         }()
 
 	func() {
-                var blake2s wolfSSL.Blake2s
-                wolfSSL.Wc_InitBlake2s(&blake2s, wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE)
-                wolfSSL.Wc_Blake2sUpdate(&blake2s, []byte(WGLabelCookie), len([]byte(WGLabelCookie)))
-                wolfSSL.Wc_Blake2sUpdate(&blake2s, pk[:], len(pk[:]))
-                wolfSSL.Wc_Blake2sFinal(&blake2s, st.mac2.encryptionKey[:], 0)
+                var sha wolfSSL.Wc_Sha256
+                wolfSSL.Wc_InitSha256_ex(&sha, nil, wolfSSL.INVALID_DEVID)
+                wolfSSL.Wc_Sha256Update(&sha, []byte(WGLabelCookie), len([]byte(WGLabelCookie)))
+                wolfSSL.Wc_Sha256Update(&sha, pk[:], len(pk[:]))
+                wolfSSL.Wc_Sha256Final(&sha, st.mac2.encryptionKey[:])
+                wolfSSL.Wc_Sha256Free(&sha)
 
         }()
 
@@ -213,7 +224,7 @@ func (st *CookieGenerator) ConsumeReply(msg *MessageCookieReply) bool {
 		return false
 	}
 
-	var cookie [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
+	var cookie [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 
         ret := wolfSSL.Wc_XChaCha20Poly1305_Decrypt(cookie[:], msg.Cookie[:], st.mac2.lastMAC1[:], msg.Nonce[:], st.mac2.encryptionKey[:])
 	if ret < 0 {
@@ -228,8 +239,8 @@ func (st *CookieGenerator) ConsumeReply(msg *MessageCookieReply) bool {
 func (st *CookieGenerator) AddMacs(msg []byte) {
 	size := len(msg)
 
-	smac2 := size - wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE
-	smac1 := smac2 - wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE
+	smac2 := size - wolfSSL.WC_SHA256_DIGEST_SIZE
+	smac1 := smac2 - wolfSSL.WC_SHA256_DIGEST_SIZE
 
 	mac1 := msg[smac1:smac2]
 	mac2 := msg[smac2:]
@@ -240,10 +251,12 @@ func (st *CookieGenerator) AddMacs(msg []byte) {
 	// set mac1
 
 	func() {
-                var blake2s wolfSSL.Blake2s
-                wolfSSL.Wc_InitBlake2s_WithKey(&blake2s, wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE, st.mac1.key[:])
-                wolfSSL.Wc_Blake2sUpdate(&blake2s, msg[:smac1], len(msg[:smac1]))
-                wolfSSL.Wc_Blake2sFinal(&blake2s, mac1[:], 0)
+                var hmac wolfSSL.Hmac
+                wolfSSL.Wc_HmacInit(&hmac, nil, wolfSSL.INVALID_DEVID)
+                wolfSSL.Wc_HmacSetKey(&hmac, wolfSSL.WC_SHA256, st.mac1.key[:], len(st.mac1.key[:]))
+                wolfSSL.Wc_HmacUpdate(&hmac, msg[:smac1], len(msg[:smac1]))
+                wolfSSL.Wc_HmacFinal(&hmac, mac1[:])
+                wolfSSL.Wc_HmacFree(&hmac)
         }()
 	copy(st.mac2.lastMAC1[:], mac1)
 	st.mac2.hasLastMAC1 = true
@@ -255,9 +268,11 @@ func (st *CookieGenerator) AddMacs(msg []byte) {
 	}
 
 	func() {
-                var blake2s wolfSSL.Blake2s
-                wolfSSL.Wc_InitBlake2s_WithKey(&blake2s, wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE, st.mac2.cookie[:])
-                wolfSSL.Wc_Blake2sUpdate(&blake2s, msg[:smac2], len(msg[:smac2]))
-                wolfSSL.Wc_Blake2sFinal(&blake2s, mac2[:], 0)
+                var hmac wolfSSL.Hmac
+                wolfSSL.Wc_HmacInit(&hmac, nil, wolfSSL.INVALID_DEVID)
+                wolfSSL.Wc_HmacSetKey(&hmac, wolfSSL.WC_SHA256, st.mac2.cookie[:], len(st.mac2.cookie[:]))
+                wolfSSL.Wc_HmacUpdate(&hmac, msg[:smac2], len(msg[:smac2]))
+                wolfSSL.Wc_HmacFinal(&hmac, mac2[:])
+                wolfSSL.Wc_HmacFree(&hmac)
         }()
 }

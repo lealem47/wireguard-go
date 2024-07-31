@@ -59,9 +59,9 @@ const (
 )
 
 const (
-	MessageInitiationSize      = 214                                           // size of handshake initiation message
-	MessageResponseSize        = 125                                            // size of response message
-	MessageCookieReplySize     = 64                                            // size of cookie reply message
+	MessageInitiationSize      = 246                                           // size of handshake initiation message
+	MessageResponseSize        = 157                                            // size of response message
+	MessageCookieReplySize     = 96                                            // size of cookie reply message
 	MessageTransportHeaderSize = 16                                            // size of data preceding content in transport message
 	MessageTransportSize       = MessageTransportHeaderSize + wolfSSL.AES_BLOCK_SIZE   // size of empty transport
 	MessageKeepaliveSize       = MessageTransportSize                          // size of keepalive
@@ -86,8 +86,8 @@ type MessageInitiation struct {
 	Ephemeral NoisePublicKey
 	Static    [NoisePublicKeySize + wolfSSL.AES_BLOCK_SIZE]byte
 	Timestamp [tai64n.TimestampSize + wolfSSL.AES_BLOCK_SIZE]byte
-	MAC1      [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
-	MAC2      [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
+	MAC1      [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
+	MAC2      [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 }
 
 type MessageResponse struct {
@@ -96,8 +96,8 @@ type MessageResponse struct {
 	Receiver  uint32
 	Ephemeral NoisePublicKey
 	Empty     [wolfSSL.AES_BLOCK_SIZE]byte
-	MAC1      [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
-	MAC2      [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE]byte
+	MAC1      [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
+	MAC2      [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 }
 
 type MessageTransport struct {
@@ -111,14 +111,14 @@ type MessageCookieReply struct {
 	Type     uint32
 	Receiver uint32
 	Nonce    [wolfSSL.XCHACHA20_POLY1305_AEAD_NONCE_SIZE]byte
-	Cookie   [wolfSSL.WC_BLAKE2S_128_DIGEST_SIZE + wolfSSL.AES_BLOCK_SIZE]byte
+	Cookie   [wolfSSL.WC_SHA256_DIGEST_SIZE + wolfSSL.AES_BLOCK_SIZE]byte
 }
 
 type Handshake struct {
 	state                     handshakeState
 	mutex                     sync.RWMutex
-	hash                      [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte       // hash value
-	chainKey                  [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte       // chain key
+	hash                      [wolfSSL.WC_SHA256_DIGEST_SIZE]byte       // hash value
+	chainKey                  [wolfSSL.WC_SHA256_DIGEST_SIZE]byte       // chain key
 	presharedKey              NoisePresharedKey        // psk
 	localEphemeral            NoisePrivateKey          // ephemeral secret key
 	localIndex                uint32                   // used to clear hash-table
@@ -132,8 +132,8 @@ type Handshake struct {
 }
 
 var (
-	InitialChainKey [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
-	InitialHash     [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
+	InitialChainKey [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
+	InitialHash     [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 	ZeroNonce       [wolfSSL.AES_IV_SIZE]byte
 )
 
@@ -142,11 +142,12 @@ func mixKey(dst, c, data []byte) {
 }
 
 func mixHash(dst, h , data []byte) {
-        var blake2s wolfSSL.Blake2s
-        wolfSSL.Wc_InitBlake2s(&blake2s, wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE)
-        wolfSSL.Wc_Blake2sUpdate(&blake2s, h[:], len(h[:]))
-        wolfSSL.Wc_Blake2sUpdate(&blake2s, data, len(data))
-        wolfSSL.Wc_Blake2sFinal(&blake2s, dst[:], len(dst[:]))
+        var sha wolfSSL.Wc_Sha256
+        wolfSSL.Wc_InitSha256_ex(&sha, nil, wolfSSL.INVALID_DEVID)
+        wolfSSL.Wc_Sha256Update(&sha, h[:], len(h[:]))
+        wolfSSL.Wc_Sha256Update(&sha, data, len(data))
+        wolfSSL.Wc_Sha256Final(&sha, dst[:])
+        wolfSSL.Wc_Sha256Free(&sha)
 }
 
 func (h *Handshake) Clear() {
@@ -169,11 +170,11 @@ func (h *Handshake) mixKey(data []byte) {
 /* Do basic precomputations
  */
 func init() {
-        var blake2s wolfSSL.Blake2s
-
-        wolfSSL.Wc_InitBlake2s(&blake2s, wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE)
-        wolfSSL.Wc_Blake2sUpdate(&blake2s, []byte(NoiseConstruction), len([]byte(NoiseConstruction)))
-        wolfSSL.Wc_Blake2sFinal(&blake2s, InitialChainKey[:], len(InitialChainKey[:]))
+        var sha wolfSSL.Wc_Sha256
+        wolfSSL.Wc_InitSha256_ex(&sha, nil, wolfSSL.INVALID_DEVID)
+        wolfSSL.Wc_Sha256Update(&sha, []byte(NoiseConstruction), len([]byte(NoiseConstruction)))
+        wolfSSL.Wc_Sha256Final(&sha, InitialChainKey[:])
+        wolfSSL.Wc_Sha256Free(&sha)
 
         mixHash(InitialHash[:], InitialChainKey[:], []byte(WGIdentifier))
 }
@@ -256,8 +257,8 @@ func (device *Device) CreateMessageInitiation(peer *Peer) (*MessageInitiation, e
 
 func (device *Device) ConsumeMessageInitiation(msg *MessageInitiation) *Peer {
 	var (
-		hash     [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
-		chainKey [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
+		hash     [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
+		chainKey [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 	)
 
 	if msg.Type != MessageInitiationType {
@@ -406,7 +407,7 @@ func (device *Device) CreateMessageResponse(peer *Peer) (*MessageResponse, error
 
 	// add preshared key
 
-	var tau [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
+	var tau [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 	var key [wolfSSL.AES_256_KEY_SIZE]byte
 
 	KDF3(
@@ -449,8 +450,8 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 	}
 
 	var (
-		hash     [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
-		chainKey [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
+		hash     [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
+		chainKey [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 	)
 
 	ok := func() bool {
@@ -489,7 +490,7 @@ func (device *Device) ConsumeMessageResponse(msg *MessageResponse) *Peer {
 
 		// add preshared key (psk)
 
-		var tau [wolfSSL.WC_BLAKE2S_256_DIGEST_SIZE]byte
+		var tau [wolfSSL.WC_SHA256_DIGEST_SIZE]byte
 		var key [wolfSSL.AES_256_KEY_SIZE]byte
 		KDF3(
                         chainKey[:],
