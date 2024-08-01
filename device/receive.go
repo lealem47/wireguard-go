@@ -262,8 +262,8 @@ func (device *Device) RoutineDecryption(id int) {
 			if ret < 0 {
 				elem.packet = nil
 			} else {
-                            elem.packet = elem.packet[16:]
-                            elem.packet = elem.packet[:len(elem.packet)-16]
+                            elem.packet = elem.packet[wolfSSL.AES_BLOCK_SIZE:]
+                            elem.packet = elem.packet[:len(elem.packet) - wolfSSL.AES_BLOCK_SIZE]
                         }
                         setZero(elem.keypair.receive[:])
                     }
