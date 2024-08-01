@@ -112,7 +112,10 @@ func (sk *NoisePrivateKey) publicKey() (pk NoisePublicKey) {
 
         wolfSSL.Wc_ecc_import_private_key_ex(ask[:], askSz, nil, 0, &key, wolfSSL.ECC_SECP256R1)
         wolfSSL.Wc_ecc_make_pub(&key, nil)
+
+        wolfSSL.PRIVATE_KEY_UNLOCK()
         wolfSSL.Wc_ecc_export_x963_ex(&key, apk[:], &apkSz, 0)
+        wolfSSL.PRIVATE_KEY_LOCK()
 
         wolfSSL.Wc_ecc_free(&key)
 
@@ -148,14 +151,14 @@ func (sk *NoisePrivateKey) sharedSecret(pk NoisePublicKey) (ss [NoisePrivateKeyS
 
         wolfSSL.Wc_InitRng(&rng)
 
-        //wolfSSL.Wc_ecc_set_rng(&privKey, &rng)
-
+        wolfSSL.PRIVATE_KEY_UNLOCK()
         if ret := wolfSSL.Wc_ecc_shared_secret(&privKey, &pubKey, ss[:], &ssSz); ret != 0 {
             wolfSSL.Wc_ecc_free(&privKey)
             wolfSSL.Wc_ecc_free(&pubKey)
             wolfSSL.Wc_FreeRng(&rng)
             return ss, errors.New("Failed create ECC shared secret")
         }
+        wolfSSL.PRIVATE_KEY_LOCK()
 
         wolfSSL.Wc_FreeRng(&rng)
         wolfSSL.Wc_ecc_free(&privKey)

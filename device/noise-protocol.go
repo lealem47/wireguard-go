@@ -170,6 +170,9 @@ func (h *Handshake) mixKey(data []byte) {
 /* Do basic precomputations
  */
 func init() {
+        wolfSSL.Wc_SetDefaultSeed_Cb()
+        wolfSSL.Wc_RunAllCast_fips()
+
         var sha wolfSSL.Wc_Sha256
         wolfSSL.Wc_InitSha256_ex(&sha, nil, wolfSSL.INVALID_DEVID)
         wolfSSL.Wc_Sha256Update(&sha, []byte(NoiseConstruction), len([]byte(NoiseConstruction)))
